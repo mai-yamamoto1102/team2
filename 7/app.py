@@ -1,3 +1,4 @@
+
 import pymysql
 pymysql.install_as_MySQLdb()
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
@@ -6,16 +7,18 @@ import datetime
 import json
 from functools import wraps
 from datetime import timedelta
+import os
 
 
 app = Flask(__name__)
 
 # MySQL配置
-app.config['MYSQL_HOST'] = 'team2-mysql-version1.mysql.database.azure.com'
-app.config['MYSQL_USER'] = 'azureuser'
-app.config['MYSQL_PASSWORD'] = 'Password1234'
-app.config['MYSQL_DB'] = 'attendance_system'
-app.config['MYSQL_CURSORCLASS'] = 'DictCursor'  # 让查询结果以字典形式返回
+app.config['DB_HOST'] = os.environ.get('DB_HOST')
+app.config['DB_USER'] = os.environ.get('DB_USER')
+app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD')
+app.config['DB_NAME'] = os.environ.get('DB_NAME')
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+
 
 # 初始化MySQL
 mysql = MySQL(app)
