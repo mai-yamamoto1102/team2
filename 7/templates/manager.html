@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム - 管理者</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>勤怠管理システム - 管理者</h2>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                <span id="user-info">{{ session.name }} さん</span>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button class="btn" id="change-password-btn">パスワード変更</button>
+                    <button class="btn logout-btn" id="logout-btn">ログアウト</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 管理者専用の打刻セクション -->
+        <div id="admin-clock-section" style="margin-bottom:32px;">
+            <h3>打刻</h3>
+            <div class="attendance-buttons">
+                <button class="btn btn-success" id="admin-clock-in-btn">出勤</button>
+                <button class="btn btn-danger"  id="admin-clock-out-btn">退勤</button>
+            </div>
+            <p id="admin-clock-message" class="success"></p>
+        </div>
+
+        <div class="admin-container">
+            <h3>社員打刻記録</h3>
+            <div class="form-group">
+                <label for="admin-employee-select">社員</label>
+                <select id="admin-employee-select">
+                    <option value="all">全員</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="admin-month">月を選択</label>
+                <input type="month" id="admin-month">
+                <button class="btn" id="admin-view-btn">表示</button>
+            </div>
+            <table id="admin-table">
+                <thead>
+                    <tr>
+                        <th>社員番号</th><th>名前</th><th>日付</th>
+                        <th>出勤時間</th><th>退勤時間</th><th>合計時間</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 打刻編集モーダル -->
+    <div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
+        <div style="position:relative;width:500px;margin:100px auto;background:#fff;padding:20px;border-radius:5px;">
+            <h3>打刻記録編集</h3>
+            <div class="form-group">
+                <label for="edit-date">日付</label>
+                <input type="date" id="edit-date" disabled>
+            </div>
+            <div class="form-group">
+                <label for="edit-clock-in">出勤時間</label>
+                <input type="time" id="edit-clock-in">
+            </div>
+            <div class="form-group">
+                <label for="edit-clock-out">退勤時間</label>
+                <input type="time" id="edit-clock-out">
+            </div>
+            <input type="hidden" id="edit-record-id">
+            <input type="hidden" id="edit-employee-id">
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button class="btn" id="cancel-edit-btn">キャンセル</button>
+                <button class="btn btn-success" id="save-edit-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- パスワード変更モーダル -->
+    <div id="password-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
+        <div style="position:relative;width:400px;margin:120px auto;background:#fff;padding:20px;border-radius:5px;">
+            <h3>パスワード変更</h3>
+            <div class="form-group">
+                <label for="current-password">現在のパスワード</label>
+                <input type="password" id="current-password">
+            </div>
+            <div class="form-group">
+                <label for="new-password">新しいパスワード</label>
+                <input type="password" id="new-password">
+            </div>
+            <div class="form-group">
+                <label for="confirm-password">確認パスワード</label>
+                <input type="password" id="confirm-password">
+            </div>
+            <p id="password-message" class="error"></p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button class="btn" id="cancel-password-btn">キャンセル</button>
+                <button class="btn btn-success" id="save-password-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const adminClockInBtn = document.getElementById('admin-clock-in-btn');
+            const adminClockOutBtn = document.getElementById('admin-clock-out-btn');
+            const adminClockMessage = document.getElementById('admin-clock-message');
+            const adminViewBtn = document.getElementById('admin-view-btn');
+            const adminMonth = document.getElementById('admin-month');
+            const adminEmployeeSelect = document.getElementById('admin-employee-select');
+            const adminTableBody = document.getElementById('admin-table-body');
+            const logoutBtn = document.getElementById('logout-btn');
+            const changePasswordBtn = document.getElementById('change-password-btn');
+            const passwordModal = document.getElementById('password-modal');
+            const editModal = document.getElementById('edit-modal');
+            const cancelEditBtn = document.getElementById('cancel-edit-btn');
+            const saveEditBtn = document.getElementById('save-edit-btn');
+            const cancelPasswordBtn = document.getElementById('cancel-password-btn');
+            const savePasswordBtn = document.getElementById('save-password-btn');
+
+            // 设置当前月份为默认值
+            const today = new Date();
+            const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            adminMonth.value = currentMonth;
+
+            // 初始化
+            init();
+
+            async function init() {
+                await loadEmployeeList();
+                await checkTodayStatus();
+                await loadEmployeeRecords('all', currentMonth);
+            }
+
+            
+
+            // 简化的API调用处理函数  
+async function apiCall(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            ...options,
+            credentials: 'same-origin'
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+}
+
+            // 出勤打卡
+            adminClockInBtn.addEventListener('click', async function() {
+                try {
+                    const data = await apiCall('/api/clock-in', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (data && data.success) {
+                        adminClockMessage.textContent = data.message;
+                        adminClockMessage.className = 'success';
+                        checkTodayStatus();
+                        loadEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                    } else if (data) {
+                        adminClockMessage.textContent = data.message;
+                        adminClockMessage.className = 'error';
+                    }
+                } catch (error) {
+                    console.error('打刻中にエラーが発生しました:', error);
+                    adminClockMessage.textContent = 'サーバーエラーが発生しました。';
+                    adminClockMessage.className = 'error';
+                }
+            });
+
+            // 退勤打卡
+            adminClockOutBtn.addEventListener('click', async function() {
+                try {
+                    const data = await apiCall('/api/clock-out', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (data && data.success) {
+                        adminClockMessage.textContent = data.message;
+                        adminClockMessage.className = 'success';
+                        checkTodayStatus();
+                        loadEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                    } else if (data) {
+                        adminClockMessage.textContent = data.message;
+                        adminClockMessage.className = 'error';
+                    }
+                } catch (error) {
+                    console.error('打刻中にエラーが発生しました:', error);
+                    adminClockMessage.textContent = 'サーバーエラーが発生しました。';
+                    adminClockMessage.className = 'error';
+                }
+            });
+
+            // 查看历史记录
+            adminViewBtn.addEventListener('click', function() {
+                const month = adminMonth.value;
+                const employeeId = adminEmployeeSelect.value;
+                
+                if (!month) {
+                    alert('月を選択してください。');
+                    return;
+                }
+                
+                loadEmployeeRecords(employeeId, month);
+            });
+
+            // 登出
+            logoutBtn.addEventListener('click', async function() {
+                try {
+                    await apiCall('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('ログアウト中にエラーが発生しました:', error);
+                }
+            });
+
+            // 打开密码修改模态框
+            changePasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'block';
+            });
+
+            // 关闭密码修改模态框
+            cancelPasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'none';
+                clearPasswordModal();
+            });
+
+            // 编辑打卡记录
+            cancelEditBtn.addEventListener('click', function() {
+                editModal.style.display = 'none';
+            });
+
+            saveEditBtn.addEventListener('click', async function() {
+                const recordId = document.getElementById('edit-record-id').value;
+                const clockIn = document.getElementById('edit-clock-in').value;
+                const clockOut = document.getElementById('edit-clock-out').value;
+
+                // 验证时间格式
+                if (clockIn && !clockIn.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/)) {
+                    alert('出勤時間の形式が正しくありません。HH:MM形式で入力してください。');
+                    return;
+                }
+                
+                if (clockOut && !clockOut.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/)) {
+                    alert('退勤時間の形式が正しくありません。HH:MM形式で入力してください。');
+                    return;
+                }
+
+                try {
+                    const data = await apiCall('/api/edit-record', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            record_id: recordId,
+                            clock_in: clockIn ? clockIn + ':00' : null,
+                            clock_out: clockOut ? clockOut + ':00' : null
+                        })
+                    });
+
+                    if (data && data.success) {
+                        editModal.style.display = 'none';
+                        loadEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                    } else if (data) {
+                        alert(data.message);
+                    }
+                } catch (error) {
+                    console.error('記録編集中にエラーが発生しました:', error);
+                    alert('サーバーエラーが発生しました。');
+                }
+            });
+
+            // 保存新密码
+            savePasswordBtn.addEventListener('click', async function() {
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                const passwordMessage = document.getElementById('password-message');
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    passwordMessage.textContent = 'すべて入力してください。';
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    passwordMessage.textContent = '確認用パスワードが一致しません。';
+                    return;
+                }
+
+                try {
+                    const data = await apiCall('/api/change-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            current_password: currentPassword,
+                            new_password: newPassword
+                        })
+                    });
+
+                    if (data && data.success) {
+                        alert('パスワードを変更しました。再ログインしてください。');
+                        window.location.href = '/';
+                    } else if (data) {
+                        passwordMessage.textContent = data.message;
+                    }
+                } catch (error) {
+                    console.error('パスワード変更中にエラーが発生しました:', error);
+                    passwordMessage.textContent = 'サーバーエラーが発生しました。';
+                }
+            });
+
+            // 辅助函数
+            function clearPasswordModal() {
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+                document.getElementById('password-message').textContent = '';
+            }
+
+            function openEditModal(record) {
+                document.getElementById('edit-date').value = record.date;
+                document.getElementById('edit-clock-in').value = record.clock_in ? record.clock_in.substring(0, 5) : '';
+                document.getElementById('edit-clock-out').value = record.clock_out ? record.clock_out.substring(0, 5) : '';
+                document.getElementById('edit-record-id').value = record.record_id;
+                document.getElementById('edit-employee-id').value = record.employee_id;
+                editModal.style.display = 'block';
+            }
+
+            async function deleteRecord(recordId) {
+                if (confirm('この打刻記録を削除しますか？')) {
+                    try {
+                        const data = await apiCall('/api/delete-record', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                record_id: recordId
+                            })
+                        });
+
+                        if (data && data.success) {
+                            loadEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                        } else if (data) {
+                            alert(data.message);
+                        }
+                    } catch (error) {
+                        console.error('記録削除中にエラーが発生しました:', error);
+                        alert('サーバーエラーが発生しました。');
+                    }
+                }
+            }
+
+            async function checkTodayStatus() {
+                try {
+                    const data = await apiCall('/api/today-status');
+                    
+                    if (data && data.success) {
+                        const status = data.status;
+                        
+                        if (status.has_clock_in) {
+                            adminClockInBtn.disabled = true;
+                            if (status.has_clock_out) {
+                                adminClockOutBtn.disabled = true;
+                                adminClockMessage.textContent = `本日の打刻完了 出勤: ${status.clock_in_time} 退勤: ${status.clock_out_time}`;
+                            } else {
+                                adminClockOutBtn.disabled = false;
+                                adminClockMessage.textContent = `本日 ${status.clock_in_time} に出勤済みです。`;
+                            }
+                        } else {
+                            adminClockInBtn.disabled = false;
+                            adminClockOutBtn.disabled = true;
+                            adminClockMessage.textContent = '';
+                        }
+                    }
+                } catch (error) {
+                    console.error('ステータス確認中にエラーが発生しました:', error);
+                    adminClockMessage.textContent = 'ステータス取得に失敗しました。';
+                    adminClockMessage.className = 'error';
+                }
+            }
+
+            async function loadEmployeeList() {
+                try {
+                    const data = await apiCall('/api/employee-list');
+                    
+                    if (data && data.success && data.employees.length > 0) {
+                        data.employees.forEach(employee => {
+                            const option = document.createElement('option');
+                            option.value = employee.employee_id;
+                            option.textContent = `${employee.employee_id} - ${employee.name}`;
+                            adminEmployeeSelect.appendChild(option);
+                        });
+                    }
+                } catch (error) {
+                    console.error('社員リスト取得中にエラーが発生しました:', error);
+                    alert('社員リストの取得に失敗しました。');
+                }
+            }
+
+            async function loadEmployeeRecords(employeeId, month) {
+                try {
+                    const data = await apiCall(`/api/all-employee-records?employee_id=${employeeId}&month=${month}`);
+                    
+                    adminTableBody.innerHTML = '';
+                    
+                    if (data && data.success && data.records.length > 0) {
+                        data.records.forEach(record => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${record.employee_id}</td>
+                                <td>${record.employee_name}</td>
+                                <td>${record.date}</td>
+                                <td>${record.clock_in || '-'}</td>
+                                <td>${record.clock_out || '-'}</td>
+                                <td>${record.hours ? record.hours + ' 時間' : '-'}</td>
+                                <td></td>
+                            `;
+                            
+                            // 添加编辑和删除按钮
+                            const editBtn = document.createElement('button');
+                            editBtn.className = 'btn btn-warning';
+                            editBtn.textContent = '編集';
+                            editBtn.style.marginRight = '5px';
+                            editBtn.onclick = function() {
+                                openEditModal(record);
+                            };
+                            
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'btn btn-danger';
+                            deleteBtn.textContent = '削除';
+                            deleteBtn.onclick = function() {
+                                deleteRecord(record.record_id);
+                            };
+                            
+                            tr.lastElementChild.appendChild(editBtn);
+                            tr.lastElementChild.appendChild(deleteBtn);
+                            
+                            adminTableBody.appendChild(tr);
+                        });
+                    } else {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td colspan="7" style="text-align:center;">この月の記録はありません。</td>';
+                        adminTableBody.appendChild(tr);
+                    }
+                } catch (error) {
+                    console.error('記録取得中にエラーが発生しました:', error);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="7" style="text-align:center;">記録の取得に失敗しました。</td>';
+                    adminTableBody.appendChild(tr);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

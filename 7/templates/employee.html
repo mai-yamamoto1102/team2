@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム - 社員</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>勤怠管理システム</h2>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                <span id="user-info">{{ session.name }} さん</span>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button class="btn" id="change-password-btn">パスワード変更</button>
+                    <button class="btn logout-btn" id="logout-btn">ログアウト</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <!-- 出退勤打刻 -->
+            <h3>打刻</h3>
+            <div class="attendance-buttons">
+                <button class="btn btn-success" id="clock-in-btn">出勤</button>
+                <button class="btn btn-danger" id="clock-out-btn">退勤</button>
+            </div>
+            <p id="clock-message" class="success"></p>
+
+            <!-- 個人履歴 -->
+            <h3>個人打刻履歴</h3>
+            <div class="form-group">
+                <label for="history-month">月を選択</label>
+                <input type="month" id="history-month">
+                <button class="btn" id="view-history-btn">履歴を表示</button>
+            </div>
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>日付</th><th>出勤時間</th><th>退勤時間</th><th>合計時間</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- パスワード変更モーダル -->
+    <div id="password-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
+        <div style="position:relative;width:400px;margin:120px auto;background:#fff;padding:20px;border-radius:5px;">
+            <h3>パスワード変更</h3>
+            <div class="form-group">
+                <label for="current-password">現在のパスワード</label>
+                <input type="password" id="current-password">
+            </div>
+            <div class="form-group">
+                <label for="new-password">新しいパスワード</label>
+                <input type="password" id="new-password">
+            </div>
+            <div class="form-group">
+                <label for="confirm-password">確認パスワード</label>
+                <input type="password" id="confirm-password">
+            </div>
+            <p id="password-message" class="error"></p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button class="btn" id="cancel-password-btn">キャンセル</button>
+                <button class="btn btn-success" id="save-password-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const clockInBtn = document.getElementById('clock-in-btn');
+            const clockOutBtn = document.getElementById('clock-out-btn');
+            const clockMessage = document.getElementById('clock-message');
+            const viewHistoryBtn = document.getElementById('view-history-btn');
+            const historyMonth = document.getElementById('history-month');
+            const historyTableBody = document.getElementById('history-table-body');
+            const logoutBtn = document.getElementById('logout-btn');
+            const changePasswordBtn = document.getElementById('change-password-btn');
+            const passwordModal = document.getElementById('password-modal');
+            const cancelPasswordBtn = document.getElementById('cancel-password-btn');
+            const savePasswordBtn = document.getElementById('save-password-btn');
+
+            // 设置当前月份为默认值
+            const today = new Date();
+            const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            historyMonth.value = currentMonth;
+
+            // 页面加载时检查今日打卡状态和历史记录
+            init();
+
+            // 初始化函数
+            async function init() {
+                await checkTodayStatus();
+                await loadHistory(currentMonth);
+            }
+
+            
+
+            // 通用的API调用处理函数
+           // 简化的API调用处理函数  
+async function apiCall(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            ...options,
+            credentials: 'same-origin'
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+}
+            // 出勤打卡
+            clockInBtn.addEventListener('click', async function() {
+                try {
+                    clockInBtn.disabled = true;
+                    clockMessage.textContent = '処理中...';
+                    clockMessage.className = 'success';
+
+                    const data = await apiCall('/api/clock-in', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    if (data && data.success) {
+                        clockMessage.textContent = data.message;
+                        clockMessage.className = 'success';
+                        checkTodayStatus();
+                        loadHistory(historyMonth.value);
+                    } else if (data) {
+                        clockMessage.textContent = data.message;
+                        clockMessage.className = 'error';
+                        clockInBtn.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('打刻中にエラーが発生しました:', error);
+                    clockMessage.textContent = 'サーバーエラーが発生しました。';
+                    clockMessage.className = 'error';
+                    clockInBtn.disabled = false;
+                }
+            });
+
+            // 退勤打卡
+            clockOutBtn.addEventListener('click', async function() {
+                try {
+                    clockOutBtn.disabled = true;
+                    clockMessage.textContent = '処理中...';
+                    clockMessage.className = 'success';
+
+                    const data = await apiCall('/api/clock-out', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    if (data && data.success) {
+                        clockMessage.textContent = data.message;
+                        clockMessage.className = 'success';
+                        checkTodayStatus();
+                        loadHistory(historyMonth.value);
+                    } else if (data) {
+                        clockMessage.textContent = data.message;
+                        clockMessage.className = 'error';
+                        clockOutBtn.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('打刻中にエラーが発生しました:', error);
+                    clockMessage.textContent = 'サーバーエラーが発生しました。';
+                    clockMessage.className = 'error';
+                    clockOutBtn.disabled = false;
+                }
+            });
+
+            // 查看历史记录
+            viewHistoryBtn.addEventListener('click', function() {
+                const month = historyMonth.value;
+                if (!month) {
+                    alert('月を選択してください。');
+                    return;
+                }
+                loadHistory(month);
+            });
+
+            // 登出
+            logoutBtn.addEventListener('click', async function() {
+                try {
+                    await apiCall('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('ログアウト中にエラーが発生しました:', error);
+                }
+            });
+
+            // 打开密码修改模态框
+            changePasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'block';
+            });
+
+            // 关闭密码修改模态框
+            cancelPasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'none';
+                clearPasswordModal();
+            });
+
+            // 点击模态框外部关闭
+            passwordModal.addEventListener('click', function(e) {
+                if (e.target === passwordModal) {
+                    passwordModal.style.display = 'none';
+                    clearPasswordModal();
+                }
+            });
+
+            // 保存新密码
+            savePasswordBtn.addEventListener('click', async function() {
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                const passwordMessage = document.getElementById('password-message');
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    passwordMessage.textContent = 'すべて入力してください。';
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    passwordMessage.textContent = '確認用パスワードが一致しません。';
+                    return;
+                }
+
+                try {
+                    const data = await apiCall('/api/change-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            current_password: currentPassword,
+                            new_password: newPassword
+                        })
+                    });
+
+                    if (data && data.success) {
+                        alert('パスワードを変更しました。再ログインしてください。');
+                        window.location.href = '/';
+                    } else if (data) {
+                        passwordMessage.textContent = data.message;
+                    }
+                } catch (error) {
+                    console.error('パスワード変更中にエラーが発生しました:', error);
+                    passwordMessage.textContent = 'サーバーエラーが発生しました。';
+                }
+            });
+
+            // 辅助函数
+            function clearPasswordModal() {
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+                document.getElementById('password-message').textContent = '';
+            }
+
+            async function checkTodayStatus() {
+                try {
+                    const data = await apiCall('/api/today-status');
+                    
+                    if (data && data.success) {
+                        const status = data.status;
+                        
+                        if (status.has_clock_in) {
+                            clockInBtn.disabled = true;
+                            if (status.has_clock_out) {
+                                clockOutBtn.disabled = true;
+                                clockMessage.textContent = `本日の打刻完了 出勤: ${status.clock_in_time} 退勤: ${status.clock_out_time}`;
+                            } else {
+                                clockOutBtn.disabled = false;
+                                clockMessage.textContent = `本日 ${status.clock_in_time} に出勤済みです。`;
+                            }
+                        } else {
+                            clockInBtn.disabled = false;
+                            clockOutBtn.disabled = true;
+                            clockMessage.textContent = '';
+                        }
+                    } else if (data) {
+                        clockMessage.textContent = data.message || 'ステータスの取得に失敗しました。';
+                        clockMessage.className = 'error';
+                    }
+                } catch (error) {
+                    console.error('ステータス確認中にエラーが発生しました:', error);
+                    clockMessage.textContent = 'ステータス取得エラーが発生しました。';
+                    clockMessage.className = 'error';
+                }
+            }
+
+            async function loadHistory(month) {
+                try {
+                    const data = await apiCall(`/api/attendance-records?month=${month}`);
+                    
+                    historyTableBody.innerHTML = '';
+                    
+                    if (data && data.success && data.records.length > 0) {
+                        data.records.forEach(record => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${record.date}</td>
+                                <td>${record.clock_in || '-'}</td>
+                                <td>${record.clock_out || '-'}</td>
+                                <td>${record.hours ? record.hours + ' 時間' : '-'}</td>
+                            `;
+                            historyTableBody.appendChild(tr);
+                        });
+                    } else if (data && data.success) {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td colspan="4" style="text-align:center;">この月の記録はありません。</td>';
+                        historyTableBody.appendChild(tr);
+                    }
+                } catch (error) {
+                    console.error('履歴取得中にエラーが発生しました:', error);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="4" style="text-align:center;">履歴の取得に失敗しました。</td>';
+                    historyTableBody.appendChild(tr);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
