@@ -30,6 +30,6 @@
         "venv.bak{,/**}",
         ".vscode{,/**}"
     ],
-    "appService.defaultWebAppToDeploy": "/subscriptions/d067c79f-cc32-4951-a9de-0e0927700efa/resourceGroups/日本TCS_Tech_and_Process_class1/providers/Microsoft.Web/sites/team2-test",
+    "appService.defaultWebAppToDeploy": "/subscriptions/d067c79f-cc32-4951-a9de-0e0927700efa/resourceGroups/日本TCS_Tech_and_Process_class1/providers/Microsoft.Web/sites/team2-version2",
     "appService.deploySubpath": "."
 }
