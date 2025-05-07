@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム - 総務</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>勤怠管理システム - 総務</h2>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                <span id="user-info">{{ session.name }} さん</span>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button class="btn" id="change-password-btn">パスワード変更</button>
+                    <button class="btn logout-btn" id="logout-btn">ログアウト</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- タブ切り替え -->
+        <div class="tab-buttons" style="margin-top:20px;">
+            <button class="tab-btn active" data-tab="attendance-records">社員打刻記録</button>
+            <button class="tab-btn" data-tab="employee-management">社員管理</button>
+        </div>
+        
+        <!-- 打刻記録タブ -->
+        <div class="tab-content active" id="attendance-records">
+            <div class="admin-container">
+                <h3>全社員打刻記録</h3>
+                <div class="form-group">
+                    <label for="admin-employee-select">社員</label>
+                    <select id="admin-employee-select">
+                        <option value="all">全員</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="admin-month">月を選択</label>
+                    <input type="month" id="admin-month">
+                    <button class="btn" id="admin-view-btn">表示</button>
+                </div>
+                <table id="admin-table">
+                    <thead>
+                        <tr>
+                            <th>社員番号</th><th>名前</th><th>日付</th>
+                            <th>出勤時間</th><th>退勤時間</th><th>合計時間</th><th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 社員管理タブ -->
+        <div class="tab-content" id="employee-management">
+            <div class="admin-container">
+                <h3>社員管理</h3>
+                
+                <div class="form-group">
+                    <label for="new-employee-id">社員番号</label>
+                    <input type="text" id="new-employee-id" placeholder="社員番号を入力">
+                </div>
+                <div class="form-group">
+                    <label for="new-employee-lastname">姓</label>
+                    <input type="text" id="new-employee-lastname" placeholder="姓を入力">
+                </div>
+                <div class="form-group">
+                    <label for="new-employee-firstname">名</label>
+                    <input type="text" id="new-employee-firstname" placeholder="名を入力">
+                </div>
+                <div class="form-group">
+                    <label for="new-employee-password">初期パスワード</label>
+                    <input type="password" id="new-employee-password" placeholder="パスワードを入力">
+                </div>
+                <div class="form-group">
+                    <label for="new-employee-role">権限</label>
+                    <select id="new-employee-role">
+                        <option value="employee">一般社員</option>
+                        <option value="manager">管理者</option>
+                        <option value="soumu">総務</option>
+                    </select>
+                </div>
+                <button class="btn btn-success" id="add-employee-btn">社員を追加</button>
+                <p id="add-employee-message" class="success"></p>
+                
+                <h3>社員リスト</h3>
+                <table id="employee-list-table">
+                    <thead>
+                        <tr>
+                            <th>社員番号</th><th>名前</th><th>権限</th><th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-list-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 打刻編集モーダル -->
+    <div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
+        <div style="position:relative;width:500px;margin:100px auto;background:#fff;padding:20px;border-radius:5px;">
+            <h3>打刻記録編集</h3>
+            <div class="form-group">
+                <label for="edit-date">日付</label>
+                <input type="date" id="edit-date" disabled>
+            </div>
+            <div class="form-group">
+                <label for="edit-clock-in">出勤時間</label>
+                <input type="time" id="edit-clock-in">
+            </div>
+            <div class="form-group">
+                <label for="edit-clock-out">退勤時間</label>
+                <input type="time" id="edit-clock-out">
+            </div>
+            <input type="hidden" id="edit-record-id">
+            <input type="hidden" id="edit-employee-id">
+            <input type="hidden" id="edit-employee-role">
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button class="btn" id="cancel-edit-btn">キャンセル</button>
+                <button class="btn btn-success" id="save-edit-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- パスワード変更モーダル -->
+    <div id="password-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
+        <div style="position:relative;width:400px;margin:120px auto;background:#fff;padding:20px;border-radius:5px;">
+            <h3>パスワード変更</h3>
+            <div class="form-group">
+                <label for="current-password">現在のパスワード</label>
+                <input type="password" id="current-password">
+            </div>
+            <div class="form-group">
+                <label for="new-password">新しいパスワード</label>
+                <input type="password" id="new-password">
+            </div>
+            <div class="form-group">
+                <label for="confirm-password">確認パスワード</label>
+                <input type="password" id="confirm-password">
+            </div>
+            <p id="password-message" class="error"></p>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                <button class="btn" id="cancel-password-btn">キャンセル</button>
+                <button class="btn btn-success" id="save-password-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const adminViewBtn = document.getElementById('admin-view-btn');
+            const adminMonth = document.getElementById('admin-month');
+            const adminEmployeeSelect = document.getElementById('admin-employee-select');
+            const adminTableBody = document.getElementById('admin-table-body');
+            const logoutBtn = document.getElementById('logout-btn');
+            const changePasswordBtn = document.getElementById('change-password-btn');
+            const passwordModal = document.getElementById('password-modal');
+            const editModal = document.getElementById('edit-modal');
+            const cancelEditBtn = document.getElementById('cancel-edit-btn');
+            const saveEditBtn = document.getElementById('save-edit-btn');
+            const cancelPasswordBtn = document.getElementById('cancel-password-btn');
+            const savePasswordBtn = document.getElementById('save-password-btn');
+
+            // 新增：社员管理相关元素
+            const addEmployeeBtn = document.getElementById('add-employee-btn');
+            const newEmployeeId = document.getElementById('new-employee-id');
+            const newEmployeeLastname = document.getElementById('new-employee-lastname');
+            const newEmployeeFirstname = document.getElementById('new-employee-firstname');
+            const newEmployeePassword = document.getElementById('new-employee-password');
+            const newEmployeeRole = document.getElementById('new-employee-role');
+            const addEmployeeMessage = document.getElementById('add-employee-message');
+            const employeeListBody = document.getElementById('employee-list-body');
+
+            // 员工角色缓存
+            const employeeRoles = {};
+
+            // タブ切り替え
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(btn.dataset.tab).classList.add('active');
+                    
+                    // 社員管理タブが選択された場合、社員リストを読み込み
+                    if (btn.dataset.tab === 'employee-management') {
+                        loadEmployeeList();
+                    }
+                });
+            });
+
+            // 设置当前月份为默认值
+            const today = new Date();
+            const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            adminMonth.value = currentMonth;
+
+            // 初始化
+            init();
+
+            async function init() {
+                await loadEmployeeList();
+                await loadEmployeeSelector();
+                await loadAllEmployeeRecords('all', currentMonth);
+            }
+
+            
+
+            // 简化的API调用处理函数  
+async function apiCall(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            ...options,
+            credentials: 'same-origin'
+        });
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+}
+
+            // 查看历史记录
+            adminViewBtn.addEventListener('click', function() {
+                const month = adminMonth.value;
+                const employeeId = adminEmployeeSelect.value;
+                
+                if (!month) {
+                    alert('月を選択してください。');
+                    return;
+                }
+                
+                loadAllEmployeeRecords(employeeId, month);
+            });
+
+            // 新增：添加社员
+            addEmployeeBtn.addEventListener('click', async function() {
+                const employeeId = newEmployeeId.value.trim();
+                const lastName = newEmployeeLastname.value.trim();
+                const firstName = newEmployeeFirstname.value.trim();
+                const password = newEmployeePassword.value.trim();
+                const role = newEmployeeRole.value;
+                
+                if (!employeeId || !lastName || !firstName || !password) {
+                    addEmployeeMessage.textContent = 'すべての項目を入力してください。';
+                    addEmployeeMessage.className = 'error';
+                    return;
+                }
+                
+                try {
+                    const data = await apiCall('/api/add-employee', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            employee_id: employeeId,
+                            last_name: lastName,
+                            first_name: firstName,
+                            password: password,
+                            role: role
+                        })
+                    });
+                    
+                    if (data) {
+                        addEmployeeMessage.textContent = data.message;
+                        
+                        if (data.success) {
+                            addEmployeeMessage.className = 'success';
+                            // 清空输入字段
+                            newEmployeeId.value = '';
+                            newEmployeeLastname.value = '';
+                            newEmployeeFirstname.value = '';
+                            newEmployeePassword.value = '';
+                            // 重新加载社员列表
+                            loadEmployeeList();
+                            loadEmployeeSelector();
+                        } else {
+                            addEmployeeMessage.className = 'error';
+                        }
+                    }
+                } catch (error) {
+                    console.error('社員追加中にエラーが発生しました:', error);
+                    addEmployeeMessage.textContent = 'サーバーエラーが発生しました。';
+                    addEmployeeMessage.className = 'error';
+                }
+            });
+
+            // 登出
+            logoutBtn.addEventListener('click', async function() {
+                try {
+                    await apiCall('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('ログアウト中にエラーが発生しました:', error);
+                }
+            });
+
+            // 打开密码修改模态框
+            changePasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'block';
+            });
+
+            // 关闭密码修改模态框
+            cancelPasswordBtn.addEventListener('click', function() {
+                passwordModal.style.display = 'none';
+                clearPasswordModal();
+            });
+
+            // 编辑打卡记录
+            cancelEditBtn.addEventListener('click', function() {
+                editModal.style.display = 'none';
+            });
+
+            saveEditBtn.addEventListener('click', async function() {
+                const recordId = document.getElementById('edit-record-id').value;
+                const clockIn = document.getElementById('edit-clock-in').value;
+                const clockOut = document.getElementById('edit-clock-out').value;
+
+                // 验证时间格式
+                if (clockIn && !clockIn.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/)) {
+                    alert('出勤時間の形式が正しくありません。HH:MM形式で入力してください。');
+                    return;
+                }
+                
+                if (clockOut && !clockOut.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/)) {
+                    alert('退勤時間の形式が正しくありません。HH:MM形式で入力してください。');
+                    return;
+                }
+
+                try {
+                    const data = await apiCall('/api/edit-record', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            record_id: recordId,
+                            clock_in: clockIn ? clockIn + ':00' : null,
+                            clock_out: clockOut ? clockOut + ':00' : null
+                        })
+                    });
+
+                    if (data && data.success) {
+                        editModal.style.display = 'none';
+                        loadAllEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                    } else if (data) {
+                        alert(data.message);
+                    }
+                } catch (error) {
+                    console.error('記録編集中にエラーが発生しました:', error);
+                    alert('サーバーエラーが発生しました。');
+                }
+            });
+
+            // 保存新密码
+            savePasswordBtn.addEventListener('click', async function() {
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                const passwordMessage = document.getElementById('password-message');
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    passwordMessage.textContent = 'すべて入力してください。';
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    passwordMessage.textContent = '確認用パスワードが一致しません。';
+                    return;
+                }
+
+                try {
+                    const data = await apiCall('/api/change-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            current_password: currentPassword,
+                            new_password: newPassword
+                        })
+                    });
+
+                    if (data && data.success) {
+                        alert('パスワードを変更しました。再ログインしてください。');
+                        window.location.href = '/';
+                    } else if (data) {
+                        passwordMessage.textContent = data.message;
+                    }
+                } catch (error) {
+                    console.error('パスワード変更中にエラーが発生しました:', error);
+                    passwordMessage.textContent = 'サーバーエラーが発生しました。';
+                }
+            });
+
+            // 辅助函数
+            function clearPasswordModal() {
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+                document.getElementById('password-message').textContent = '';
+            }
+
+            function openEditModal(record) {
+                document.getElementById('edit-date').value = record.date;
+                document.getElementById('edit-clock-in').value = record.clock_in ? record.clock_in.substring(0, 5) : '';
+                document.getElementById('edit-clock-out').value = record.clock_out ? record.clock_out.substring(0, 5) : '';
+                document.getElementById('edit-record-id').value = record.record_id;
+                document.getElementById('edit-employee-id').value = record.employee_id;
+                
+                // 根据员工ID获取员工角色（用于权限控制）
+                const employeeRole = employeeRoles[record.employee_id] || 'unknown';
+                document.getElementById('edit-employee-role').value = employeeRole;
+                
+                editModal.style.display = 'block';
+            }
+
+            async function deleteRecord(recordId, employeeId) {
+                // 检查总务是否有权删除该记录（只能删除管理者和总务的记录）
+                const employeeRole = employeeRoles[employeeId] || 'unknown';
+                
+                if (employeeRole === 'employee') {
+                    alert('総務は一般社員の記録を削除できません。');
+                    return;
+                }
+                
+                if (confirm('この打刻記録を削除しますか？')) {
+                    try {
+                        const data = await apiCall('/api/delete-record', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                record_id: recordId
+                            })
+                        });
+
+                        if (data && data.success) {
+                            loadAllEmployeeRecords(adminEmployeeSelect.value, adminMonth.value);
+                        } else if (data) {
+                            alert(data.message);
+                        }
+                    } catch (error) {
+                        console.error('記録削除中にエラーが発生しました:', error);
+                        alert('サーバーエラーが発生しました。');
+                    }
+                }
+            }
+
+            // 新增：删除社员
+            async function deleteEmployee(employeeId) {
+                if (confirm('この社員を削除しますか？関連するすべての打刻記録も削除されます。')) {
+                    try {
+                        const data = await apiCall('/api/delete-employee', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                employee_id: employeeId
+                            })
+                        });
+                        
+                        if (data && data.success) {
+                            loadEmployeeList();
+                            loadEmployeeSelector();
+                            alert(data.message);
+                        } else if (data) {
+                            alert(data.message);
+                        }
+                    } catch (error) {
+                        console.error('社員削除中にエラーが発生しました:', error);
+                        alert('サーバーエラーが発生しました。');
+                    }
+                }
+            }
+
+            async function loadEmployeeSelector() {
+                try {
+                    const data = await apiCall('/api/employee-list');
+                    
+                    // 清空除了"全员"以外的选项
+                    while (adminEmployeeSelect.options.length > 1) {
+                        adminEmployeeSelect.remove(1);
+                    }
+                    
+                    if (data && data.success && data.employees.length > 0) {
+                        data.employees.forEach(employee => {
+                            const option = document.createElement('option');
+                            option.value = employee.employee_id;
+                            option.textContent = `${employee.employee_id} - ${employee.name}`;
+                            adminEmployeeSelect.appendChild(option);
+                            
+                            // 获取并缓存员工的角色信息
+                            apiCall(`/api/employee-role/${employee.employee_id}`)
+                                .then(data => {
+                                    if (data && data.success) {
+                                        employeeRoles[employee.employee_id] = data.role;
+                                    }
+                                })
+                                .catch(error => console.error('社員役割取得中にエラー:', error));
+                        });
+                    }
+                } catch (error) {
+                    console.error('社員リスト取得中にエラーが発生しました:', error);
+                    alert('社員リストの取得に失敗しました。');
+                }
+            }
+
+            async function loadEmployeeList() {
+                try {
+                    const data = await apiCall('/api/employee-full-list');
+                    
+                    employeeListBody.innerHTML = '';
+                    
+                    if (data && data.success && data.employees.length > 0) {
+                        const currentUserId = "{{ session.employee_id }}"; // 获取当前登录用户ID
+                        
+                        data.employees.forEach(employee => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${employee.employee_id}</td>
+                                <td>${employee.full_name}</td>
+                                <td>${employee.role_display}</td>
+                                <td></td>
+                            `;
+                            
+                            // 不允许删除自己的账户
+                            if (employee.employee_id !== currentUserId) {
+                                const deleteBtn = document.createElement('button');
+                                deleteBtn.className = 'btn btn-danger';
+                                deleteBtn.textContent = '削除';
+                                deleteBtn.onclick = function() {
+                                    deleteEmployee(employee.employee_id);
+                                };
+                                
+                                tr.lastElementChild.appendChild(deleteBtn);
+                            } else {
+                                tr.lastElementChild.textContent = '(現在のユーザー)';
+                            }
+                            
+                            employeeListBody.appendChild(tr);
+                            
+                            // 缓存员工角色
+                            employeeRoles[employee.employee_id] = employee.role;
+                        });
+                    } else {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td colspan="4" style="text-align:center;">社員が見つかりません。</td>';
+                        employeeListBody.appendChild(tr);
+                    }
+                } catch (error) {
+                    console.error('社員リスト取得中にエラーが発生しました:', error);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="4" style="text-align:center;">社員リストの取得に失敗しました。</td>';
+                    employeeListBody.appendChild(tr);
+                }
+            }
+
+            async function loadAllEmployeeRecords(employeeId, month) {
+                try {
+                    const data = await apiCall(`/api/all-employee-records?employee_id=${employeeId}&month=${month}`);
+                    
+                    adminTableBody.innerHTML = '';
+                    
+                    if (data && data.success && data.records.length > 0) {
+                        data.records.forEach(record => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${record.employee_id}</td>
+                                <td>${record.employee_name}</td>
+                                <td>${record.date}</td>
+                                <td>${record.clock_in || '-'}</td>
+                                <td>${record.clock_out || '-'}</td>
+                                <td>${record.hours ? record.hours + ' 時間' : '-'}</td>
+                                <td></td>
+                            `;
+                            
+                            // 添加编辑和删除按钮
+                            const editBtn = document.createElement('button');
+                            editBtn.className = 'btn btn-warning';
+                            editBtn.textContent = '編集';
+                            editBtn.style.marginRight = '5px';
+                            editBtn.onclick = function() {
+                                openEditModal(record);
+                            };
+                            
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'btn btn-danger';
+                            deleteBtn.textContent = '削除';
+                            deleteBtn.onclick = function() {
+                                deleteRecord(record.record_id, record.employee_id);
+                            };
+                            
+                            // 总务只能编辑/删除管理者和总务的记录
+                            const employeeRole = employeeRoles[record.employee_id] || 'unknown';
+                            if (employeeRole === 'employee') {
+                                editBtn.title = '一般社員の記録は編集できません';
+                                editBtn.disabled = true;
+                                deleteBtn.title = '一般社員の記録は削除できません';
+                                deleteBtn.disabled = true;
+                            }
+                            
+                            tr.lastElementChild.appendChild(editBtn);
+                            tr.lastElementChild.appendChild(deleteBtn);
+                            
+                            adminTableBody.appendChild(tr);
+                        });
+                    } else {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td colspan="7" style="text-align:center;">この月の記録はありません。</td>';
+                        adminTableBody.appendChild(tr);
+                    }
+                } catch (error) {
+                    console.error('記録取得中にエラーが発生しました:', error);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="7" style="text-align:center;">記録の取得に失敗しました。</td>';
+                    adminTableBody.appendChild(tr);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

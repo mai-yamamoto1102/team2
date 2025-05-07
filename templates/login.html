@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム - ログイン</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-container">
+        <h2>勤怠管理システム - ログイン</h2>
+        <div class="form-group">
+            <label for="employee-id">社員番号</label>
+            <input type="text" id="employee-id" placeholder="社員番号を入力">
+        </div>
+        <div class="form-group">
+            <label for="password">パスワード</label>
+            <input type="password" id="password" placeholder="パスワードを入力">
+        </div>
+        <button class="btn" id="login-btn">ログイン</button>
+        <p id="login-error" class="error"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginBtn = document.getElementById('login-btn');
+            const employeeIdInput = document.getElementById('employee-id');
+            const passwordInput = document.getElementById('password');
+            const loginError = document.getElementById('login-error');
+
+            loginBtn.addEventListener('click', async function() {
+                const employeeId = employeeIdInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!employeeId || !password) {
+                    loginError.textContent = '社員番号とパスワードを入力してください。';
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            employee_id: employeeId,
+                            password: password
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // 登录成功，根据角色重定向到不同页面
+                        if (data.user.role === 'employee') {
+                            window.location.href = '/employee';
+                        } else if (data.user.role === 'manager') {
+                            window.location.href = '/manager';
+                        } else if (data.user.role === 'soumu') {
+                            window.location.href = '/soumu';
+                        }
+                    } else {
+                        // 登录失败，显示错误消息
+                        loginError.textContent = data.message;
+                    }
+                } catch (error) {
+                    console.error('ログイン中にエラーが発生しました:', error);
+                    loginError.textContent = 'サーバーエラーが発生しました。後でもう一度お試しください。';
+                }
+            });
+
+            // Enter键登录
+            passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    loginBtn.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
