@@ -12,22 +12,23 @@ import os
 
 app = Flask(__name__)
 
-# MySQL配置
-app.config['DB_HOST'] = os.environ.get('DB_HOST')
-app.config['DB_USER'] = os.environ.get('DB_USER')
+# MySQL構成
+app.config['DB_HOST'] = 'team2-mysql-version1.mysql.database.azure.com'
+app.config['DB_USER'] = 'azureuser@attendance_system'
 app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD')
-app.config['DB_NAME'] = os.environ.get('DB_NAME')
+app.config['DB_NAME'] = 'attendance_system'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+app.config['DB_PORT'] = 3306 
 
 
-# 初始化MySQL
+# MySQL初期化
 mysql = MySQL(app)
 
-# 设置Session密钥
-app.secret_key = 'attendance_secret_key'
+# セッションキー設定
+app.secret_key = os.environ.get('SECRET_KEY')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)  # 设置24小时
 
-# 添加时间格式化辅助函数
+# 時間のフォーマット補助関数
 def format_time_value(time_value):
     """
     Convert time value to string format, handling both timedelta and time objects
@@ -69,7 +70,7 @@ def role_required(roles):
         return decorated_function
     return decorator
 
-# 首页 - 登录页面
+# ホーム画面（ログイン画面）
 @app.route('/')
 def login_page():
     if 'employee_id' in session:
@@ -82,16 +83,16 @@ def login_page():
     return render_template('login.html')
 
 
-# 登录API
+# ログインAPI
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     employee_id = data.get('employee_id')
     password = data.get('password')
 
-    # 数据库连接
+    # DB接続
     cur = mysql.connection.cursor()
-    # 查询匹配的用户
+    # ユーザー照合
     sql = """
     SELECT employee_id, CONCAT(last_name, ' ', first_name) as full_name, role 
     FROM employees 
@@ -328,7 +329,7 @@ def get_today_status():
     
     return jsonify(success=True, status=status)
 
-# 管理员获取所有员工记录API
+# 全社員一覧の取得API
 @app.route('/api/all-employee-records', methods=['GET'])
 @login_required
 @role_required(['manager', 'soumu'])
