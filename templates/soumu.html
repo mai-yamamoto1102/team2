@@ -88,7 +88,7 @@
                 <table id="employee-list-table">
                     <thead>
                         <tr>
-                            <th>社員番号</th><th>名前</th><th>権限</th><th>操作</th>
+                            <th>社員番号</th><th>名前</th><th>権限</th><th>操作</th><th>パスワード初期化</th>
                         </tr>
                     </thead>
                     <tbody id="employee-list-body"></tbody>
@@ -517,54 +517,67 @@ async function apiCall(url, options = {}) {
             }
 
             async function loadEmployeeList() {
-                try {
-                    const data = await apiCall('/api/employee-full-list');
-                    
-                    employeeListBody.innerHTML = '';
-                    
-                    if (data && data.success && data.employees.length > 0) {
-                        const currentUserId = "{{ session.employee_id }}"; // 获取当前登录用户ID
-                        
-                        data.employees.forEach(employee => {
-                            const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td>${employee.employee_id}</td>
-                                <td>${employee.full_name}</td>
-                                <td>${employee.role_display}</td>
-                                <td></td>
-                            `;
-                            
-                            // 不允许删除自己的账户
-                            if (employee.employee_id !== currentUserId) {
-                                const deleteBtn = document.createElement('button');
-                                deleteBtn.className = 'btn btn-danger';
-                                deleteBtn.textContent = '削除';
-                                deleteBtn.onclick = function() {
-                                    deleteEmployee(employee.employee_id);
-                                };
-                                
-                                tr.lastElementChild.appendChild(deleteBtn);
-                            } else {
-                                tr.lastElementChild.textContent = '(現在のユーザー)';
-                            }
-                            
-                            employeeListBody.appendChild(tr);
-                            
-                            // 缓存员工角色
-                            employeeRoles[employee.employee_id] = employee.role;
-                        });
-                    } else {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = '<td colspan="4" style="text-align:center;">社員が見つかりません。</td>';
-                        employeeListBody.appendChild(tr);
-                    }
-                } catch (error) {
-                    console.error('社員リスト取得中にエラーが発生しました:', error);
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td colspan="4" style="text-align:center;">社員リストの取得に失敗しました。</td>';
-                    employeeListBody.appendChild(tr);
+    try {
+        const data = await apiCall('/api/employee-full-list');
+        
+        employeeListBody.innerHTML = '';
+        
+        if (data && data.success && data.employees.length > 0) {
+            const currentUserId = "{{ session.employee_id }}"; // 現在のユーザーID
+            
+            data.employees.forEach(employee => {
+                // ① tr を作る（社員番号／名前／権限／操作の <td> は空で生成）
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${employee.employee_id}</td>
+                    <td>${employee.full_name}</td>
+                    <td>${employee.role_display}</td>
+                    <td></td>
+                `;
+                
+                // ② 「削除」ボタン or 「(現在のユーザー)」を追加
+                if (employee.employee_id !== currentUserId) {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'btn btn-danger';
+                    deleteBtn.textContent = '削除';
+                    deleteBtn.onclick = () => deleteEmployee(employee.employee_id);
+                    tr.lastElementChild.appendChild(deleteBtn);
+                } else {
+                    tr.lastElementChild.textContent = '(現在のユーザー)';
                 }
-            }
+
+                // ③ **ここで「パスワード初期化」列用のセルを作成・追加**
+                //    └ deleteBtn のある <td> のすぐ後に、新しい <td> を追加する
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'btn btn-warning';
+                resetBtn.textContent = '初期化';
+                resetBtn.onclick = () => {
+                    if (confirm(`社員 ${employee.full_name} のパスワードを初期化しますか？`)) {
+                        resetEmployeePassword(employee.employee_id);
+                    }
+                };
+                const resetCell = document.createElement('td');
+                resetCell.appendChild(resetBtn);
+                tr.appendChild(resetCell);
+
+                // ④ 最後に tr をテーブルに追加
+                employeeListBody.appendChild(tr);
+
+                // ⑤ 社員の role をキャッシュ
+                employeeRoles[employee.employee_id] = employee.role;
+            });
+        } else {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align:center;">社員が見つかりません。</td>';
+            employeeListBody.appendChild(tr);
+        }
+    } catch (error) {
+        console.error('社員リスト取得中にエラー:', error);
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" style="text-align:center;">社員リストの取得に失敗しました。</td>';
+        employeeListBody.appendChild(tr);
+    }
+}
 
             async function loadAllEmployeeRecords(employeeId, month) {
                 try {
