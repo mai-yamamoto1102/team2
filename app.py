@@ -764,13 +764,41 @@ def delete_employee():
         return jsonify(success=False, message=f"エラーが発生しました: {str(e)}"), 500
 
 # 获取社员列表API (包含完整信息，用于管理界面)
+# 社員一覧取得API
 @app.route('/api/employee-full-list', methods=['GET'])
 @login_required
 @role_required(['soumu'])
+def get_employee_full_list():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+        SELECT employee_id, first_name, last_name, CONCAT(last_name, ' ', first_name) as full_name, role
+        FROM employees ORDER BY employee_id
+        """)
+        employees = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        for emp in employees:
+            if emp['role'] == 'soumu':
+                emp['role_display'] = '総務'
+            elif emp['role'] == 'manager':
+                emp['role_display'] = '管理者'
+            elif emp['role'] == 'employee':
+                emp['role_display'] = '一般'
+        
+        return jsonify(success=True, employees=employees)
+    except Exception as e:
+        print(f"社員一覧取得エラー: {str(e)}")
+        return jsonify(success=False, message=f"エラーが発生しました: {str(e)}"), 500
+
+# パスワード初期化API
+@app.route('/api/reset-password', methods=['POST'])
+@login_required
+@role_required(['soumu'])
 def reset_password():
-    """
-    社員のパスワードを初期値「password」にリセットします。
-    """
     data = request.get_json()
     employee_id = data.get('employee_id')
     if not employee_id:
@@ -789,35 +817,6 @@ def reset_password():
         return jsonify(success=False, message=f"初期化に失敗しました: {e}"), 500
     finally:
         conn.close()
-
-def get_employee_full_list():
-    try:
-        # 获取数据库连接
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Get all employees
-        cursor.execute("""
-        SELECT employee_id, first_name, last_name, CONCAT(last_name, ' ', first_name) as full_name, role
-        FROM employees ORDER BY employee_id
-        """)
-        employees = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        # Map role values to display names
-        for emp in employees:
-            if emp['role'] == 'soumu':
-                emp['role_display'] = '総務'
-            elif emp['role'] == 'manager':
-                emp['role_display'] = '管理者'
-            elif emp['role'] == 'employee':
-                emp['role_display'] = '一般'
-        
-        return jsonify(success=True, employees=employees)
-    except Exception as e:
-        print(f"获取员工完整列表错误: {str(e)}")
-        return jsonify(success=False, message=f"エラーが発生しました: {str(e)}"), 500
 
 # 添加调试端点，用于详细测试数据库连接
 @app.route('/debug-db')
