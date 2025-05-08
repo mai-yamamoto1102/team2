@@ -13,13 +13,14 @@ import os
 app = Flask(__name__)
 
 # MySQL構成
-app.config['DB_HOST'] = 'team2-mysql-version1.mysql.database.azure.com'
-app.config['DB_USER'] = 'azureuser@attendance_system'
-app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD')
-app.config['DB_NAME'] = 'attendance_system'
+app.config['MYSQL_HOST'] = 'team2-mysql-version1.mysql.database.azure.com'
+app.config['MYSQL_USER'] = 'azureuser@team2-mysql-version1'
+app.config['MYSQL_PASSWORD'] = os.environ.get('DB_PASSWORD')
+app.config['MYSQL_DB'] = 'attendance_system'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-app.config['DB_PORT'] = 3306 
+app.config['MYSQL_PORT'] = 3306 
 
+app.config['MYSQL_SSL'] = {'check_hostname': False}
 
 # MySQL初期化
 mysql = MySQL(app)
@@ -86,9 +87,12 @@ def login_page():
 # ログインAPI
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    employee_id = data.get('employee_id')
-    password = data.get('password')
+    # data = request.get_json()
+    # employee_id = data.get('employee_id')
+    # password = data.get('password')
+    # フォームからデータを取得する
+    employee_id = request.form.get('employee_id')
+    password = request.form.get('password')
 
     # DB接続
     cur = mysql.connection.cursor()
