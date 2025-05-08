@@ -483,7 +483,26 @@ async function apiCall(url, options = {}) {
                     }
                 }
             }
-
+    /**
+     * 社員パスワードを初期化する
+     */
+            async function resetEmployeePassword(employeeId) {
+                try {
+                    const res = await apiCall('/api/reset-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ employee_id: employeeId })
+                    });
+                    if (res.success) {
+                        alert('パスワードを「password」に初期化しました。');
+                    } else {
+                        alert(res.message || '初期化に失敗しました。');
+                    }
+                } catch (error) {
+                    console.error('初期化エラー:', error);
+                    alert('サーバーエラーが発生しました。');
+                }
+            }
             async function loadEmployeeSelector() {
                 try {
                     const data = await apiCall('/api/employee-list');
