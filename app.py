@@ -812,7 +812,7 @@ def reset_password():
                 ('password', employee_id)
             )
         conn.commit()
-        return jsonify(success=True, message="パスワードを初期化しました。")
+        return jsonify(success=True, message="パスワードを「password」に初期化しました。")
     except Exception as e:
         return jsonify(success=False, message=f"初期化に失敗しました: {e}"), 500
     finally:
